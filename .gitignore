@@ -8,8 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
 
-
-doubaoime_v1.1.2_100102018_official
+# 凭据和运行时数据
 credentials.json
+data/
+server.log
+.env
+
+# 杂项
+doubaoime_v1.1.2_100102018_official
 hook_*.js

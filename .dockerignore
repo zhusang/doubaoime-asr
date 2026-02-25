@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.git/
+.python-version
+*.log
+data/
+node_modules/
+examples/
+static/
+uv.lock
+server.log
+wave_protocol.md

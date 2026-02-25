@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>豆包语音识别</title>
+<style>
+  :root {
+    --primary: #4F46E5;
+    --primary-light: #818CF8;
+    --primary-dark: #3730A3;
+    --bg: #0F172A;
+    --card: #1E293B;
+    --card-hover: #334155;
+    --text: #F1F5F9;
+    --text-dim: #94A3B8;
+    --success: #10B981;
+    --error: #EF4444;
+    --recording: #EF4444;
+    --border: #334155;
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; min-height: 100dvh;
+    display: flex; flex-direction: column;
+  }
+
+  .header {
+    text-align: center; padding: 24px 16px 16px;
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+    position: relative; overflow: hidden;
+  }
+  .header::after {
+    content:''; position:absolute; top:-50%; right:-30%;
+    width:200px; height:200px; border-radius:50%; background:rgba(255,255,255,0.05);
+  }
+  .header h1 { font-size:22px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .header p { font-size:13px; color:rgba(255,255,255,0.7); margin-top:4px; }
+
+  .main {
+    flex:1; padding:16px; max-width:600px; margin:0 auto; width:100%;
+    display:flex; flex-direction:column; gap:16px;
+  }
+
+  .card { background:var(--card); border-radius:var(--radius); padding:20px; border:1px solid var(--border); }
+  .card-title { font-size:15px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px; color:var(--text-dim); }
+
+  /* Tabs */
+  .tabs { display:flex; gap:0; border-radius:10px; overflow:hidden; border:1px solid var(--border); margin-bottom:16px; }
+  .tab {
+    flex:1; padding:10px; text-align:center; font-size:14px; font-weight:500;
+    cursor:pointer; background:var(--card); color:var(--text-dim); border:none; transition:all 0.2s;
+  }
+  .tab.active { background:var(--primary); color:white; }
+
+  /* Mic */
+  .mic-area { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .mic-btn {
+    width:96px; height:96px; border-radius:50%; border:none;
+    background:linear-gradient(135deg, var(--primary), var(--primary-light));
+    color:white; font-size:40px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:all 0.3s; position:relative;
+    box-shadow:0 4px 24px rgba(79,70,229,0.4);
+  }
+  .mic-btn:active { transform:scale(0.95); }
+  .mic-btn.recording {
+    background:linear-gradient(135deg, var(--recording), #F87171);
+    box-shadow:0 4px 24px rgba(239,68,68,0.5);
+    animation:pulse-ring 1.5s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow:0 0 0 0 rgba(239,68,68,0.5); }
+    70% { box-shadow:0 0 0 20px rgba(239,68,68,0); }
+    100% { box-shadow:0 0 0 0 rgba(239,68,68,0); }
+  }
+  .mic-hint { font-size:13px; color:var(--text-dim); }
+  .mic-timer { font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--recording); display:none; }
+  .mic-timer.show { display:block; }
+
+  .waveform-container { width:100%; height:48px; display:none; margin-top:4px; }
+  .waveform-container.show { display:block; }
+  .waveform-canvas { width:100%; height:100%; }
+
+  /* Live text */
+  .live-text {
+    width:100%; min-height:44px; padding:12px; border-radius:10px;
+    background:var(--bg); font-size:15px; line-height:1.6;
+    color:var(--primary-light); word-break:break-all; white-space:pre-wrap;
+    display:none;
+  }
+  .live-text.show { display:block; }
+  .live-text.final { color:var(--text); }
+
+  /* Upload */
+  .upload-area {
+    border:2px dashed var(--border); border-radius:12px; padding:24px;
+    text-align:center; cursor:pointer; transition:all 0.2s; position:relative;
+  }
+  .upload-area:hover, .upload-area.dragover { border-color:var(--primary-light); background:rgba(79,70,229,0.05); }
+  .upload-area .icon { font-size:32px; margin-bottom:8px; }
+  .upload-area .label { font-size:14px; color:var(--text-dim); }
+  .upload-area .formats { font-size:12px; color:var(--text-dim); margin-top:4px; opacity:0.6; }
+  .upload-area input { display:none; }
+
+  .file-chip {
+    display:none; align-items:center; gap:8px;
+    background:rgba(79,70,229,0.15); border:1px solid rgba(79,70,229,0.3);
+    border-radius:8px; padding:10px 14px; margin-top:12px; font-size:13px;
+  }
+  .file-chip.show { display:flex; }
+  .file-chip .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-chip .remove { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; padding:2px 4px; }
+  .file-chip .remove:hover { color:var(--error); }
+
+  .transcribe-btn {
+    width:100%; padding:14px; border:none; border-radius:12px;
+    font-size:15px; font-weight:600; cursor:pointer;
+    background:linear-gradient(135deg, var(--primary), var(--primary-light));
+    color:white; transition:all 0.2s; margin-top:12px; display:none;
+  }
+  .transcribe-btn.show { display:block; }
+  .transcribe-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .transcribe-btn:not(:disabled):active { transform:scale(0.98); }
+
+  /* Result */
+  .result-card { display:none; }
+  .result-card.show { display:block; }
+  .result-box {
+    background:var(--bg); border-radius:12px; padding:16px;
+    min-height:60px; font-size:15px; line-height:1.7;
+    word-break:break-all; position:relative; white-space:pre-wrap;
+  }
+  .result-box.interim { color:var(--text-dim); }
+  .result-box.final { color:var(--text); }
+  .result-box.error { color:var(--error); }
+
+  .result-actions { display:flex; gap:8px; margin-top:12px; }
+  .result-actions button {
+    flex:1; padding:10px; border:1px solid var(--border); border-radius:10px;
+    background:var(--card); color:var(--text); font-size:13px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;
+  }
+  .result-actions button:active { background:var(--card-hover); transform:scale(0.97); }
+
+  .status-bar {
+    display:none; align-items:center; gap:8px;
+    padding:10px 14px; border-radius:10px; font-size:13px; margin-bottom:4px;
+  }
+  .status-bar.show { display:flex; }
+  .status-bar.loading { background:rgba(79,70,229,0.1); color:var(--primary-light); }
+  .status-bar.success { background:rgba(16,185,129,0.1); color:var(--success); }
+  .status-bar.error { background:rgba(239,68,68,0.1); color:var(--error); }
+  .spinner {
+    width:16px; height:16px; border:2px solid transparent;
+    border-top-color:currentColor; border-radius:50%;
+    animation:spin 0.8s linear infinite; flex-shrink:0;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .toast {
+    position:fixed; bottom:40px; left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--card); color:var(--text);
+    padding:10px 20px; border-radius:10px; font-size:13px;
+    opacity:0; transition:all 0.3s; pointer-events:none;
+    border:1px solid var(--border); z-index:100;
+  }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .settings-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; }
+  .settings-row label { font-size:13px; color:var(--text-dim); }
+  .settings-row input[type="text"] {
+    background:var(--bg); border:1px solid var(--border); border-radius:8px;
+    padding:6px 10px; color:var(--text); font-size:13px; width:180px; text-align:right;
+  }
+
+  .panel { display:none; }
+  .panel.active { display:block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎙️ 豆包语音识别</h1>
+  <p>实时流式识别 · 上传文件转文字</p>
+</div>
+
+<div class="main">
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="settings-row">
+      <label>🔗 服务地址</label>
+      <input type="text" id="serverUrl" value="" placeholder="http://localhost:8081">
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('realtime')">🎤 实时识别</button>
+    <button class="tab" onclick="switchTab('upload')">📁 文件上传</button>
+  </div>
+
+  <!-- Realtime Panel -->
+  <div class="panel active" id="panel-realtime">
+    <div class="card">
+      <div class="mic-area">
+        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">🎙️</button>
+        <div class="mic-timer" id="micTimer">00:00</div>
+        <div class="waveform-container" id="waveformContainer">
+          <canvas class="waveform-canvas" id="waveformCanvas"></canvas>
+        </div>
+        <div class="mic-hint" id="micHint">点击开始实时识别</div>
+      </div>
+      <div class="live-text" id="liveText"></div>
+    </div>
+  </div>
+
+  <!-- Upload Panel -->
+  <div class="panel" id="panel-upload">
+    <div class="card">
+      <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📤</div>
+        <div class="label">点击或拖拽上传音频</div>
+        <div class="formats">支持 WAV / MP3 / M4A / OGG / FLAC</div>
+        <input type="file" id="fileInput" accept="audio/*" onchange="handleFile(this.files[0])">
+      </div>
+      <div class="file-chip" id="fileChip">
+        <span>🎵</span>
+        <span class="name" id="fileName"></span>
+        <button class="remove" onclick="clearFile()">✕</button>
+      </div>
+      <button class="transcribe-btn" id="transcribeBtn" onclick="transcribeFile()">✨ 开始识别</button>
+    </div>
+  </div>
+
+  <!-- Result (for file upload) -->
+  <div class="card result-card" id="resultCard">
+    <div class="card-title">📝 识别结果</div>
+    <div class="status-bar" id="statusBar">
+      <div class="spinner"></div>
+      <span id="statusText"></span>
+    </div>
+    <div class="result-box" id="resultBox"></div>
+    <div class="result-actions">
+      <button onclick="copyResult()">📋 复制</button>
+      <button onclick="clearResult()">🗑️ 清除</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- PCM Processor for AudioWorklet -->
+<script id="pcm-processor-src" type="text/worklet">
+class PCMProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input[0]) {
+      // Float32 → Int16
+      const float32 = input[0];
+      const int16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32[i]));
+        int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      this.port.postMessage(int16.buffer, [int16.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-processor', PCMProcessor);
+</script>
+
+<script>
+// ===== State =====
+let selectedFile = null;
+let isRecording = false;
+let recordTimer = null;
+let recordSeconds = 0;
+let audioContext = null;
+let analyser = null;
+let animFrameId = null;
+let mediaStream = null;
+let ws = null;
+let workletNode = null;
+let allFinalTexts = [];
+
+// Server URL
+const defaultUrl = `${location.protocol}//${location.hostname}:8081`;
+document.getElementById('serverUrl').value = localStorage.getItem('asr_server') || defaultUrl;
+
+function getServer() {
+  const v = document.getElementById('serverUrl').value.trim().replace(/\/+$/, '');
+  localStorage.setItem('asr_server', v);
+  return v;
+}
+function getWsUrl() {
+  const http = getServer();
+  return http.replace(/^http/, 'ws') + '/ws/realtime';
+}
+
+// ===== Tabs =====
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', (name === 'realtime' ? i === 0 : i === 1));
+  });
+  document.getElementById('panel-realtime').classList.toggle('active', name === 'realtime');
+  document.getElementById('panel-upload').classList.toggle('active', name === 'upload');
+}
+
+// ===== Toast =====
+function showToast(msg, duration = 2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ===== Status =====
+function showStatus(type, msg) {
+  const bar = document.getElementById('statusBar');
+  const text = document.getElementById('statusText');
+  bar.className = 'status-bar show ' + type;
+  text.textContent = msg;
+  bar.querySelector('.spinner').style.display = type === 'loading' ? 'block' : 'none';
+}
+function hideStatus() { document.getElementById('statusBar').classList.remove('show'); }
+
+// ===== Realtime Recording =====
+async function toggleRecording() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+    });
+
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+
+    // Analyser for waveform
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    // AudioWorklet for PCM extraction
+    const blob = new Blob(
+      [document.getElementById('pcm-processor-src').textContent],
+      { type: 'application/javascript' }
+    );
+    const workletUrl = URL.createObjectURL(blob);
+    await audioContext.audioWorklet.addModule(workletUrl);
+    URL.revokeObjectURL(workletUrl);
+
+    workletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+    source.connect(workletNode);
+    workletNode.connect(audioContext.destination); // needed to keep processing
+
+    // Connect WebSocket
+    ws = new WebSocket(getWsUrl());
+    ws.binaryType = 'arraybuffer';
+
+    allFinalTexts = [];
+    const liveText = document.getElementById('liveText');
+    liveText.textContent = '';
+    liveText.className = 'live-text show';
+
+    ws.onopen = () => {
+      // Start sending PCM data
+      workletNode.port.onmessage = (e) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(e.data);
+        }
+      };
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'INTERIM_RESULT') {
+          liveText.className = 'live-text show';
+          liveText.textContent = allFinalTexts.join('') + data.text;
+        } else if (data.type === 'FINAL_RESULT') {
+          allFinalTexts.push(data.text);
+          liveText.className = 'live-text show final';
+          liveText.textContent = allFinalTexts.join('');
+        } else if (data.type === 'ERROR') {
+          liveText.textContent += '\n❌ ' + (data.error || '识别错误');
+        }
+      } catch (err) {
+        console.warn('WS parse error:', err);
+      }
+    };
+
+    ws.onerror = () => showToast('🚫 WebSocket 连接失败', 3000);
+    ws.onclose = () => {};
+
+    isRecording = true;
+
+    // UI
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micBtn').textContent = '⏹️';
+    document.getElementById('micHint').textContent = '正在实时识别... 点击停止';
+    document.getElementById('waveformContainer').classList.add('show');
+    recordSeconds = 0;
+    updateTimer();
+    recordTimer = setInterval(() => { recordSeconds++; updateTimer(); }, 1000);
+    document.getElementById('micTimer').classList.add('show');
+    drawWaveform();
+
+  } catch (e) {
+    showToast('🚫 无法访问麦克风: ' + e.message, 3000);
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+
+  // Send EOS to server
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send('EOS');
+    // Close after a short delay to receive final results
+    setTimeout(() => {
+      if (ws) { ws.close(); ws = null; }
+    }, 2000);
+  }
+
+  // Stop worklet
+  if (workletNode) {
+    workletNode.port.onmessage = null;
+    workletNode.disconnect();
+    workletNode = null;
+  }
+
+  // Stop media
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+
+  // UI
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micBtn').textContent = '🎙️';
+  document.getElementById('micHint').textContent = '点击开始实时识别';
+  document.getElementById('waveformContainer').classList.remove('show');
+  document.getElementById('micTimer').classList.remove('show');
+  clearInterval(recordTimer);
+  cancelAnimationFrame(animFrameId);
+
+  if (audioContext) { audioContext.close(); audioContext = null; }
+
+  // Mark live text as final
+  const liveText = document.getElementById('liveText');
+  if (liveText.textContent) {
+    liveText.className = 'live-text show final';
+  }
+}
+
+function updateTimer() {
+  const m = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+  const s = String(recordSeconds % 60).padStart(2, '0');
+  document.getElementById('micTimer').textContent = `${m}:${s}`;
+}
+
+function drawWaveform() {
+  if (!analyser) return;
+  const canvas = document.getElementById('waveformCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = canvas.offsetHeight * 2;
+  const bufLen = analyser.frequencyBinCount;
+  const data = new Uint8Array(bufLen);
+
+  function draw() {
+    animFrameId = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const barW = (canvas.width / bufLen) * 2.5;
+    let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+      const h = (data[i] / 255) * canvas.height;
+      const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - h);
+      gradient.addColorStop(0, '#4F46E5');
+      gradient.addColorStop(1, '#818CF8');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, canvas.height - h, barW - 1, h);
+      x += barW;
+    }
+  }
+  draw();
+}
+
+// ===== File Upload =====
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault(); uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileChip').classList.add('show');
+  document.getElementById('transcribeBtn').classList.add('show');
+}
+
+function clearFile() {
+  selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileChip').classList.remove('show');
+  document.getElementById('transcribeBtn').classList.remove('show');
+}
+
+async function transcribeFile() {
+  if (!selectedFile) return;
+  const btn = document.getElementById('transcribeBtn');
+  btn.disabled = true;
+
+  const resultCard = document.getElementById('resultCard');
+  const resultBox = document.getElementById('resultBox');
+  resultCard.classList.add('show');
+  resultBox.className = 'result-box interim';
+  resultBox.textContent = '';
+  showStatus('loading', '识别中...');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    const resp = await fetch(getServer() + '/transcribe/stream', { method: 'POST', body: formData });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+          if (data.type === 'FINAL_RESULT') {
+            finalText = data.text;
+            resultBox.className = 'result-box final';
+            resultBox.textContent = finalText;
+          } else if (data.type === 'INTERIM_RESULT') {
+            resultBox.className = 'result-box interim';
+            resultBox.textContent = data.text;
+          } else if (data.type === 'ERROR' || data.type === 'error') {
+            throw new Error(data.error || data.error_msg || '识别失败');
+          }
+        } catch (e) {
+          if (e.message && !e.message.includes('JSON')) console.warn('Parse:', e);
+        }
+      }
+    }
+    if (finalText) { showStatus('success', '✅ 识别完成'); }
+    else { resultBox.textContent = resultBox.textContent || '（未识别到语音内容）'; showStatus('success', '识别完成'); }
+  } catch (e) {
+    resultBox.className = 'result-box error';
+    resultBox.textContent = '❌ ' + e.message;
+    showStatus('error', '识别失败');
+  } finally { btn.disabled = false; }
+}
+
+// ===== Result Actions =====
+function copyResult() {
+  // Copy from either live text or result box
+  const liveText = document.getElementById('liveText').textContent;
+  const resultText = document.getElementById('resultBox').textContent;
+  const text = liveText || resultText;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => showToast('✅ 已复制'));
+}
+
+function clearResult() {
+  document.getElementById('resultCard').classList.remove('show');
+  document.getElementById('resultBox').textContent = '';
+  document.getElementById('liveText').className = 'live-text';
+  document.getElementById('liveText').textContent = '';
+  hideStatus();
+}
+</script>
+</body>
+</html>

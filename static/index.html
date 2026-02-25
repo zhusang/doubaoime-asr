@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>豆包语音识别</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+        
+        .record-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(145deg, #e74c3c, #c0392b);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(231, 76, 60, 0.4);
+        }
+        
+        .record-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(231, 76, 60, 0.5);
+        }
+        
+        .record-btn.recording {
+            background: linear-gradient(145deg, #27ae60, #1e8449);
+            box-shadow: 0 10px 30px rgba(39, 174, 96, 0.4);
+            animation: pulse 1.5s infinite;
+        }
+        
+        .record-btn.recording:hover {
+            box-shadow: 0 15px 40px rgba(39, 174, 96, 0.5);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .record-icon {
+            font-size: 36px;
+            margin-bottom: 5px;
+        }
+        
+        .status {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 20px;
+            font-size: 14px;
+            min-height: 20px;
+        }
+        
+        .status.error {
+            color: #e74c3c;
+        }
+        
+        .timer {
+            text-align: center;
+            color: #fff;
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 30px;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .result-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            min-height: 100px;
+            margin-bottom: 20px;
+        }
+        
+        .result-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .result-text {
+            color: #fff;
+            font-size: 18px;
+            line-height: 1.6;
+            word-break: break-word;
+        }
+        
+        .result-text.placeholder {
+            color: rgba(255, 255, 255, 0.3);
+            font-style: italic;
+        }
+        
+        .upload-section {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        
+        .upload-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px 30px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .file-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: #fff;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 10px;
+            transition: all 0.2s ease;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ 豆包语音识别</h1>
+        <p class="subtitle">点击录音按钮开始，再次点击结束并识别</p>
+        
+        <div class="timer" id="timer">00:00</div>
+        
+        <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+            <span class="record-icon" id="recordIcon">🎤</span>
+            <span id="recordText">开始录音</span>
+        </button>
+        
+        <div class="status" id="status"></div>
+        
+        <div class="result-box">
+            <div class="result-label">识别结果</div>
+            <div class="result-text placeholder" id="result">等待录音...</div>
+            <button class="copy-btn" id="copyBtn" style="display: none;" onclick="copyResult()">📋 复制结果</button>
+        </div>
+        
+        <div class="upload-section">
+            <div class="upload-label">或者上传音频文件</div>
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" class="file-input" accept="audio/*" onchange="uploadFile(this)">
+                <label for="fileInput" class="file-btn">📁 选择音频文件</label>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let timerInterval;
+        let seconds = 0;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const recordIcon = document.getElementById('recordIcon');
+        const recordText = document.getElementById('recordText');
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
+        const timer = document.getElementById('timer');
+        const copyBtn = document.getElementById('copyBtn');
+        
+        async function toggleRecording() {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+        
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    audioChunks.push(e.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    await transcribeAudio(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                isRecording = true;
+                
+                recordBtn.classList.add('recording');
+                recordIcon.textContent = '⏹️';
+                recordText.textContent = '停止录音';
+                status.textContent = '正在录音...';
+                status.className = 'status';
+                
+                // 启动计时器
+                seconds = 0;
+                updateTimer();
+                timerInterval = setInterval(() => {
+                    seconds++;
+                    updateTimer();
+                }, 1000);
+                
+            } catch (err) {
+                status.textContent = '无法访问麦克风: ' + err.message;
+                status.className = 'status error';
+            }
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                recordBtn.classList.remove('recording');
+                recordIcon.textContent = '🎤';
+                recordText.textContent = '开始录音';
+                
+                clearInterval(timerInterval);
+            }
+        }
+        
+        function updateTimer() {
+            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const secs = (seconds % 60).toString().padStart(2, '0');
+            timer.textContent = `${mins}:${secs}`;
+        }
+        
+        async function transcribeAudio(audioBlob) {
+            status.innerHTML = '<span class="loading"></span>正在识别...';
+            status.className = 'status';
+            result.textContent = '处理中...';
+            result.className = 'result-text placeholder';
+            copyBtn.style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.webm');
+                
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.text) {
+                    result.textContent = data.text;
+                    result.className = 'result-text';
+                    status.textContent = '识别完成 ✓';
+                    copyBtn.style.display = 'inline-block';
+                } else {
+                    result.textContent = data.error || '识别失败，请重试';
+                    result.className = 'result-text placeholder';
+                    status.textContent = '识别失败';
+                    status.className = 'status error';
+                }
+            } catch (err) {
+                result.textContent = '网络错误: ' + err.message;
+                result.className = 'result-text placeholder';
+                status.textContent = '请求失败';
+                status.className = 'status error';
+            }
+        }
+        
+        async function uploadFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            status.innerHTML = '<span class="loading"></span>正在上传并识别...';
+            status.className = 'status';
+            result.textContent = '处理中...';
+            result.className = 'result-text placeholder';
+            copyBtn.style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.text) {
+                    result.textContent = data.text;
+                    result.className = 'result-text';
+                    status.textContent = '识别完成 ✓';
+                    copyBtn.style.display = 'inline-block';
+                } else {
+                    result.textContent = data.error || '识别失败，请重试';
+                    result.className = 'result-text placeholder';
+                    status.textContent = '识别失败';
+                    status.className = 'status error';
+                }
+            } catch (err) {
+                result.textContent = '网络错误: ' + err.message;
+                result.className = 'result-text placeholder';
+                status.textContent = '请求失败';
+                status.className = 'status error';
+            }
+            
+            input.value = '';
+        }
+        
+        function copyResult() {
+            const text = result.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✓ 已复制';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

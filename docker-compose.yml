@@ -1,0 +1,19 @@
+services:
+  doubaoime-asr:
+    build: .
+    container_name: doubaoime-asr
+    restart: unless-stopped
+    ports:
+      - "${ASR_PORT:-8081}:8081"
+    volumes:
+      # 持久化凭据，避免每次重启重新注册设备
+      - ./data:/app/data
+    environment:
+      - ASR_HOST=0.0.0.0
+      - ASR_PORT=8081
+      - ASR_CREDENTIAL_PATH=/app/data/credentials.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
